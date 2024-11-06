@@ -128,7 +128,7 @@
 
         .global-counter {
             position: fixed;
-            top: 70px;  
+            top: 70px;  /* Position below personal counter */
             right: 20px;
             background: rgba(255,255,255,0.9);
             padding: 10px 20px;
@@ -215,14 +215,16 @@
             text-decoration: underline;
         }
     </style>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 </head>
 <body>
     <div class="container">
         <div class="score-counter"><span id="score">0</span></div>
         <!-- <div class="global-counter">Total Celebration Confetti Presses: <span id="globalScore">0</span> 🎉</div> -->
-
+        
         <h1>🎉 TRUMP 2024! 🎉</h1>
-
+        
         <div class="trump-face clickable-element" onclick="playTrumpSound()">
             🎉
         </div>
@@ -295,19 +297,46 @@
     </div>
 
     <script>
+        // Initialize Firebase with the correct config
+        const firebaseConfig = {
+            apiKey: "AIzaSyACnHWpSC8zjL938sY6mG2iyg66MqtLTIM",
+            authDomain: "trumplandslide-2eed7.firebaseapp.com",
+            databaseURL: "https://trumplandslide-2eed7-default-rtdb.firebaseio.com",  // This is correct
+            projectId: "trumplandslide-2eed7",
+            storageBucket: "trumplandslide-2eed7.firebasestorage.app",
+            messagingSenderId: "535878399813",
+            appId: "1:535878399813:web:02ac040ad580465b76f02c"
+        };
 
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        // Test the connection by writing some data
+        database.ref('test').set({
+            message: "Database connection test"
+        })
+        .then(() => {
+            console.log("Database connected successfully!");
+        })
+        .catch((error) => {
+            console.error("Database connection error:", error);
+        });
+
+        // Create confetti
         function createConfetti() {
             const confetti = document.createElement('div');
             confetti.className = 'confetti';
             confetti.style.left = Math.random() * 100 + 'vw';
             confetti.style.backgroundColor = ['#ff0000', '#ffffff', '#0000ff'][Math.floor(Math.random() * 3)];
             document.body.appendChild(confetti);
-
+            
             setTimeout(() => {
                 confetti.remove();
             }, 3000);
         }
 
+        // Create fireworks
         function createFirework() {
             const firework = document.createElement('div');
             firework.className = 'firework';
@@ -315,12 +344,13 @@
             firework.style.top = Math.random() * 100 + 'vh';
             firework.style.backgroundColor = ['#ff0000', '#ffffff', '#0000ff'][Math.floor(Math.random() * 3)];
             document.body.appendChild(firework);
-
+            
             setTimeout(() => {
                 firework.remove();
             }, 1000);
         }
 
+        // Generate effects continuously
         setInterval(createConfetti, 100);
         setInterval(createFirework, 500);
 
@@ -347,20 +377,23 @@
             createConfetti();
         }
 
+        // Load global confetti presses from localStorage
         let globalConfettiPresses = parseInt(localStorage.getItem('globalConfettiPresses') || '0');
-
+        
         function playTrumpSound() {
             updateScore(1);
-
+            // Update global confetti presses
             globalConfettiPresses++;
             localStorage.setItem('globalConfettiPresses', globalConfettiPresses);
-
+            
+            // Update both displays
             document.getElementById('globalScore').textContent = globalConfettiPresses;
-
+            
             const trumpFace = document.querySelector('.trump-face');
             trumpFace.style.transform = 'scale(1.5)';
             setTimeout(() => trumpFace.style.transform = 'scale(1)', 200);
-
+            
+            // Create celebration effects
             for(let i = 0; i < 10; i++) {
                 createFirework();
                 createConfetti();
@@ -384,41 +417,50 @@
                 setTimeout(() => balloon.remove(), 1000);
             };
             document.body.appendChild(balloon);
-
+            
             setTimeout(() => balloon.remove(), 10000);
         }
 
+        // Generate balloons periodically
         setInterval(createBalloon, 2000);
 
+        // Load celebrations from localStorage on page load
         let celebrations = JSON.parse(localStorage.getItem('celebrations') || '[]');
-
+        
         function addCelebration() {
             const locationSelect = document.getElementById('location');
             const location = locationSelect.value;
-
+            
             if (location) {
                 const timestamp = new Date().toLocaleTimeString();
-                celebrations.unshift(`${location} at ${timestamp}`);
-
-                localStorage.setItem('celebrations', JSON.stringify(celebrations));
-                updateCelebrationsList();
-                locationSelect.value = '';  
+                // Push to Firebase
+                database.ref('celebrations').push({
+                    location: location,
+                    timestamp: timestamp
+                });
+                
+                locationSelect.value = '';
                 createFirework();
                 createConfetti();
                 updateScore(1);
             }
         }
 
-        function updateCelebrationsList() {
+        // Listen for celebrations updates
+        database.ref('celebrations').on('value', (snapshot) => {
+            const celebrations = [];
+            snapshot.forEach((childSnapshot) => {
+                const celebration = childSnapshot.val();
+                celebrations.unshift(`${celebration.location} at ${celebration.timestamp}`);
+            });
+            
             const celebrationsDiv = document.getElementById('celebrations');
-            const totalCelebrations = celebrations.length;
-
             celebrationsDiv.innerHTML = `
                 <div style="font-size: 1.2em; margin-bottom: 15px;">
-                    Total Patriots Celebrating: ${totalCelebrations} 🇺🇸
+                    Total Patriots Celebrating: ${celebrations.length} 🇺🇸
                 </div>
                 ${celebrations
-                    .slice(0, 10) 
+                    .slice(0, 10)
                     .map(celebration => `
                         <div class="celebration-entry">
                             🎉 Patriot celebrating from ${celebration}!
@@ -426,16 +468,22 @@
                     `)
                     .join('')}
             `;
-        }
+        });
 
-        updateCelebrationsList();
+        // Listen for global counter updates
+        database.ref('globalConfettiPresses').on('value', (snapshot) => {
+            const count = snapshot.val() || 0;
+            document.getElementById('score').textContent = count;
+        });
 
+        // Allow Enter key to submit
         document.getElementById('location').addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 addCelebration();
             }
         });
 
+        // Initialize global counter on page load
         document.getElementById('globalScore').textContent = globalConfettiPresses;
     </script>
 </body>
